@@ -5,6 +5,7 @@ from PIL import Image, ImageDraw, ImageFont
 import textwrap
 import os
 import urllib.request
+import io # İndirme butonu için eklendi
 
 # Sayfa ayarları
 st.set_page_config(page_title="Çocuklar İçin Bilgi Kitabı", page_icon="🤠")
@@ -34,7 +35,6 @@ def generate_facts(api_key, topic):
     if response.status_code == 200:
         result = response.json()
         content = result['choices'][0]['message']['content']
-        # JSON formatını temizle
         if content.startswith("```json"):
             content = content[7:-3].strip()
         facts = json.loads(content)
@@ -45,7 +45,6 @@ def generate_facts(api_key, topic):
 
 # Görsel oluşturma fonksiyonu
 def create_page_image(facts_4, font_path):
-    # 6x9 inç, 150 DPI (900x1350 piksel)
     width, height = 900, 1350
     img = Image.new('RGB', (width, height), 'white')
     draw = ImageDraw.Draw(img)
@@ -63,7 +62,6 @@ def create_page_image(facts_4, font_path):
     box_height = 270
     gap = 40
     
-    # Kutu rengi (Açık mavi)
     box_color = "#D6EAF8"
     text_color = "#2C3E50"
     line_color = "#7F8C8D"
@@ -71,13 +69,11 @@ def create_page_image(facts_4, font_path):
     for i, fact in enumerate(facts_4):
         y_start = margin_y + i * (box_height + gap)
         
-        # Açık mavi kutuyu çiz
         draw.rounded_rectangle(
             [margin_x, y_start, margin_x + box_width, y_start + box_height],
             radius=20, fill=box_color
         )
         
-        # Yazıyı ortala (Kelime kaydırma ile)
         max_text_width = box_width - 40
         words = fact.split()
         lines = []
@@ -93,7 +89,6 @@ def create_page_image(facts_4, font_path):
                 current_line = word + " "
         lines.append(current_line)
         
-        # Satır yüksekliğini hesapla ve dikey ortala
         line_height = draw.textbbox((0, 0), "Ay", font=font)[3] - draw.textbbox((0, 0), "Ay", font=font)[1]
         total_text_height = len(lines) * (line_height + 10)
         y_text = y_start + (box_height - total_text_height) / 2
@@ -105,7 +100,6 @@ def create_page_image(facts_4, font_path):
             draw.text((x_text, y_text), line.strip(), font=font, fill=text_color)
             y_text += line_height + 10
             
-        # Ayırıcı çizgi ve yıldız (son kutu hariç)
         if i < 3:
             line_y = y_start + box_height + (gap / 2)
             mid_x = width / 2
@@ -120,15 +114,19 @@ def create_page_image(facts_4, font_path):
 st.title("📚 Çocuklar İçin Bilgi Kitabı Tasarlayıcı")
 st.markdown("8-12 yaş arası çocuklar için 7 sayfalık (28 bilgi) eğlenceli bir kitap oluşturun!")
 
-api_key = st.text_input("OpenRouter API Anahtarınızı Girin:", type="password")
+# API anahtarı artık metin kutusundan değil, Secrets'tan çekilecek
 topic = st.text_input("Kitabın Konusu (Örn: Cowboy, Uzay, Dinozor):")
 
 if st.button("Kitabı Oluştur"):
-    if not api_key or not topic:
-        st.warning("Lütfen API anahtarını ve konuyu girin!")
+    # Secrets içinde anahtar var mı kontrol et
+    if "OPENROUTER_API_KEY" not in st.secrets:
+        st.error("API anahtarı bulunamadı! Lütfen Streamlit Cloud > Settings > Secrets kısmına ekleyin.")
+    elif not topic:
+        st.warning("Lütfen bir konu girin!")
     else:
         with st.spinner("Yapay zeka bilgileri yazıyor... (Bu biraz zaman alabilir)"):
-            # Font indirme (Sistemlerde font sorunu olmaması için)
+            api_key = st.secrets["OPENROUTER_API_KEY"] # Anahtar burada çağrılıyor
+            
             font_path = "Roboto-Regular.ttf"
             if not os.path.exists(font_path):
                 urllib.request.urlretrieve("https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Regular.ttf", font_path)
@@ -137,7 +135,6 @@ if st.button("Kitabı Oluştur"):
             
             if facts and len(facts) == 28:
                 st.success("28 bilgi başarıyla oluşturuldu! Sayfalar çiziliyor...")
-                images = []
                 
                 for page_num in range(7):
                     start_idx = page_num * 4
@@ -145,12 +142,9 @@ if st.button("Kitabı Oluştur"):
                     page_facts = facts[start_idx:end_idx]
                     
                     img = create_page_image(page_facts, font_path)
-                    images.append(img)
                     
-                    # Ekranda göster
                     st.image(img, caption=f"Sayfa {page_num + 1}")
                     
-                    # İndirme butonu
                     img_bytes = io.BytesIO()
                     img.save(img_bytes, format="PNG")
                     st.download_button(
