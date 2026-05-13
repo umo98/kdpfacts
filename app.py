@@ -2,10 +2,8 @@ import streamlit as st
 import requests
 import json
 from PIL import Image, ImageDraw, ImageFont
-import textwrap
 import os
-import urllib.request
-import io # İndirme butonu için eklendi
+import io
 
 # Sayfa ayarları
 st.set_page_config(page_title="Çocuklar İçin Bilgi Kitabı", page_icon="🤠")
@@ -49,6 +47,7 @@ def create_page_image(facts_4, font_path):
     img = Image.new('RGB', (width, height), 'white')
     draw = ImageDraw.Draw(img)
     
+    # Font yükleme (Eğer yoksa varsayılan kullan)
     try:
         font = ImageFont.truetype(font_path, 28)
         font_star = ImageFont.truetype(font_path, 36)
@@ -114,22 +113,27 @@ def create_page_image(facts_4, font_path):
 st.title("📚 Çocuklar İçin Bilgi Kitabı Tasarlayıcı")
 st.markdown("8-12 yaş arası çocuklar için 7 sayfalık (28 bilgi) eğlenceli bir kitap oluşturun!")
 
-# API anahtarı artık metin kutusundan değil, Secrets'tan çekilecek
 topic = st.text_input("Kitabın Konusu (Örn: Cowboy, Uzay, Dinozor):")
 
 if st.button("Kitabı Oluştur"):
-    # Secrets içinde anahtar var mı kontrol et
     if "OPENROUTER_API_KEY" not in st.secrets:
         st.error("API anahtarı bulunamadı! Lütfen Streamlit Cloud > Settings > Secrets kısmına ekleyin.")
     elif not topic:
         st.warning("Lütfen bir konu girin!")
     else:
         with st.spinner("Yapay zeka bilgileri yazıyor... (Bu biraz zaman alabilir)"):
-            api_key = st.secrets["OPENROUTER_API_KEY"] # Anahtar burada çağrılıyor
+            api_key = st.secrets["OPENROUTER_API_KEY"]
             
+            # YENİ FONT İNDİRME YÖNTEMİ (Requests ile)
             font_path = "Roboto-Regular.ttf"
             if not os.path.exists(font_path):
-                urllib.request.urlretrieve("https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Regular.ttf", font_path)
+                try:
+                    font_url = "https://github.com/google/fonts/raw/main/apache/roboto/Roboto-Regular.ttf"
+                    response = requests.get(font_url)
+                    with open(font_path, "wb") as f:
+                        f.write(response.content)
+                except Exception as e:
+                    st.warning("Font dosyası indirilemedi, sistem varsayılan fontu kullanılacak.")
             
             facts = generate_facts(api_key, topic)
             
